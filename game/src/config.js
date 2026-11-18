@@ -1,61 +1,69 @@
-// Every tuning number and colour in one place. The playfield is a fixed 1280x720 logical area;
-// the renderer scales it to the window, so no rule below depends on the screen size.
+// Solmar Bay configuration: city layout, tuning, story data.
+// All names, places and characters are original inventions for this game.
+var SB = window.SB || {};
+window.SB = SB;
 
-export const FIELD = { width: 1280, height: 720, groundY: 664 };
-
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
-export const STEP = 1 / 60;
-
-export const PLAYER = {
-  width: 72,
-  height: 24,
-  speed: 560,
-  invulnerable: 1.5,
+SB.CFG = {
+  cityHalf: 190,          // playable half-size in world units (city spans -190..190)
+  roadSpacing: 48,        // distance between road centre lines
+  roadWidth: 12,
+  blockSize: 36,
+  gravity: 30,
+  walkSpeed: 7,
+  runSpeed: 11,
+  carAccel: 26,
+  carMaxSpeed: 46,
+  carReverseMax: 14,
+  carBrake: 55,
+  carTurn: 2.1,
+  playerHealthMax: 100,
+  startCash: 500,
+  startAmmo: 24,
+  ammoMax: 120,
+  saveKey: 'solmarBaySaveV1',
+  dayLengthSec: 480,      // full in-game day
+  dayStartHour: 9,
 };
 
-export const LIVES = 3;
+// Named districts of Solmar Bay (original names).
+SB.DISTRICTS = [
+  { name: 'Marina Row', x: -120, z: -120 },
+  { name: 'Palm Heights', x: 120, z: -120 },
+  { name: 'Old Docks', x: -120, z: 120 },
+  { name: 'Sunset Strip', x: 120, z: 120 },
+  { name: 'Downtown Solmar', x: 0, z: 0 },
+];
 
-export const BLOCK = {
-  minWidth: 40,
-  maxWidth: 110,
-  height: 36,
-  speed: 240,
-  speedPerLevel: 30,
-  speedJitter: 90,
-  interval: 0.55,
-  intervalScale: 0.88,
-  minInterval: 0.14,
-  dodgePoints: 1,
+// Story characters (original).
+SB.CHARACTERS = {
+  player: 'Rico Vega',
+  fixer: 'Mara Quinn',
+  rival: 'Dante Cross',
+  cop: 'Chief Alana Reyes',
 };
 
-export const COIN = {
-  size: 24,
-  speed: 190,
-  speedPerLevel: 14,
-  interval: 1.4,
-  intervalJitter: 0.8,
-  points: 10,
-};
+// Mission catalogue: id, title, briefing, reward, time limit (seconds, 0 = none).
+SB.MISSION_DEFS = [
+  {
+    id: 'm1', title: 'JOB 1: THE FIRST DELIVERY',
+    briefing: 'Mara needs a package taken from the Marina docks to the Sunset Strip cafe. Drive fast, stay clean.',
+    reward: 800, timeLimit: 150,
+  },
+  {
+    id: 'm2', title: 'JOB 2: HOT PURSUIT',
+    briefing: 'Dante Cross stole Mara\u2019s car. Chase his orange coupe down and ram it until it stops. Watch the cops.',
+    reward: 1500, timeLimit: 180,
+  },
+  {
+    id: 'm3', title: 'JOB 3: HARBOR HEIST',
+    briefing: 'Steal the black sedan parked at the Old Docks and bring it to the hideout in Palm Heights. The police will not like it.',
+    reward: 2500, timeLimit: 210,
+  },
+];
 
-/** Seconds of play per level, and the last level: speeds and spawn rates stop growing there. */
-export const LEVEL = { seconds: 12, max: 12 };
+// Car paint palette.
+SB.CAR_COLORS = [0xd84315, 0x1565c0, 0xf9a825, 0x2e7d32, 0x6a1b9a, 0x00838f, 0xc0ca33, 0xad1457, 0x546e7a, 0xeceff1];
+SB.PED_COLORS = [0xe53935, 0x1e88e5, 0x43a047, 0xfb8c00, 0x8e24aa, 0x00acc1, 0xfdd835, 0xec407a, 0x78909c, 0x5d4037];
 
-/** How many falling things can exist at once; the pool is allocated once, at boot. */
-export const POOL_SIZE = 64;
-
-export const PALETTE = {
-  backdrop: '#11141b',
-  sky: '#1b1f2a',
-  ground: '#2a3040',
-  player: '#4fc3f7',
-  block: '#e5534b',
-  coin: '#f2c94c',
-  panel: '#252b38',
-  text: '#eef1f5',
-  muted: '#8b93a3',
-};
-
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-
-/** Where the best score is kept between visits (this browser only). */
-export const BEST_KEY = 'block-dodger.best';
+// Road centre lines (grid): roads run along x = -144,-96,-48,0,48,96,144 and same for z.
+SB.ROAD_LINES = [-144, -96, -48, 0, 48, 96, 144];
