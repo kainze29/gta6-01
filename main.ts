@@ -1,43 +1,34 @@
-// A working gta6-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its
-// scripts, three.js vendored as game/vendor/three.min.js, no network request), and the program
-// hands it in. It copies game/ and screenshots/ from beside this file to /output and writes
-// /output/dossier.json, the summary the judge reads, with the vendored make.fun library.
-// The game is Solmar Bay, an original open-world crime game built for this bounty: a sun-soaked
-// procedural city explored on foot and by car, with traffic, pedestrians, stealable cars, a
-// wanted level with police pursuit, three story missions, combat, a HUD with a minimap, a start
-// screen, pause and a localStorage save, and WebAudio-synthesised sound. Nothing in it comes
-// from Rockstar Games or any other commercial game: the city, names, story, art and sound are
-// all original, made in code for this entry.
-//
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+// Solmar Bay entrypoint: hands the game in by copying game/ and screenshots/
+// from this repository into the output directory and writing dossier.json
+// with buildDossier from vendor/makefun-game.ts. Standard library only,
+// deterministic: the same repository always writes the same bytes.
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)));
+const outDir = resolve(process.env.MAKEFUN_OUTPUT_DIR || '/output');
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+// Start from a clean output directory so stale files can never leak in.
+rmSync(outDir, { recursive: true, force: true });
+mkdirSync(outDir, { recursive: true });
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  }),
-);
+// The game and its screenshots, copied whole.
+for (const name of ['game', 'screenshots']) {
+  const src = join(repoRoot, name);
+  if (!existsSync(src)) throw new Error(`Solmar Bay: missing ${name}/ in ${repoRoot}`);
+  cpSync(src, join(outDir, name), { recursive: true });
+}
+
+// The dossier, built from exactly what was just copied.
+const dossier = buildDossier(outDir, {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 48 * 1024 * 1024,
+  game_path_max_bytes: 1000,
+});
+writeFileSync(join(outDir, 'dossier.json'), dossier);
+
+console.log(`Solmar Bay: wrote ${outDir} (dossier.json ${dossier.length} bytes)`);

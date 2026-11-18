@@ -1,113 +1,224 @@
-// HUD: cash, health, wanted stars, mission tracker, speedometer, clock,
-// toasts and the circular canvas minimap with live blips.
+// Solmar Bay HUD: cash, health, car, ammo, wanted stars, mission tracker,
+// speedometer, clock, district name, prompts, toasts, and the minimap.
+// All names, places and characters are original inventions for this game.
 (function () {
   'use strict';
-  var toastTimer = null;
+  var SB = window.SB || {};
+  window.SB = SB;
+
+  // World units across the whole map, used to scale the minimap.
+  var MAP_SPAN = 400;
+  var MAP_R = 92;
 
   SB.HUD = {
-    show: function () { SB.el('hud').classList.remove('hidden'); },
-    hide: function () { SB.el('hud').classList.add('hidden'); },
+    els: null,
+    toastTimer: null,
+    mapCtx: null,
 
-    toast: function (title, sub) {
-      SB.el('toast').textContent = title || '';
-      SB.el('toastSub').textContent = sub || '';
-      if (toastTimer) clearTimeout(toastTimer);
-      toastTimer = setTimeout(function () {
-        SB.el('toast').textContent = '';
-        SB.el('toastSub').textContent = '';
-      }, 3400);
+    init: function () {
+      var g = function (id) { return document.getElementById(id); };
+      this.els = {
+        hud: g('hud'),
+        cash: g('cashValue'),
+        healthFill: g('healthFill'),
+        healthValue: g('healthValue'),
+        carRow: g('carRow'),
+        carFill: g('carFill'),
+        carValue: g('carValue'),
+        ammo: g('ammoValue'),
+        stars: g('stars'),
+        wantedLabel: g('wantedLabel'),
+        clock: g('clockValue'),
+        district: g('districtValue'),
+        missionTitle: g('missionTitle'),
+        missionText: g('missionText'),
+        missionTimer: g('missionTimer'),
+        speedo: g('speedo'),
+        speed: g('speedValue'),
+        minimap: g('minimap'),
+        prompt: g('prompt'),
+        promptText: g('promptText'),
+        toast: g('toast'),
+        toastTitle: g('toastTitle'),
+        toastSub: g('toastSub'),
+        damageFlash: g('damageFlash'),
+        debug: g('debugState'),
+      };
+      this.mapCtx = this.els.minimap.getContext('2d');
+      // The HUD stays hidden behind the title screen; beginPlay shows it.
     },
 
-    setHint: function (text) { SB.el('hint').textContent = text || ''; },
-
-    update: function (state) {
-      SB.el('cash').textContent = SB.fmtCash(SB.Player.cash);
-      SB.el('healthFill').style.width = SB.clamp(SB.Player.health, 0, 100) + '%';
-      SB.el('armorLabel').textContent = 'Health ' + Math.max(0, Math.round(SB.Player.health)) +
-        (state.inCar ? '   |   Car ' + Math.max(0, Math.min(100, Math.round(state.carHealth))) + '%' : '');
-      SB.el('ammoLabel').textContent = 'Pistol ammo ' + SB.Player.ammo + ' / ' + SB.Player.ammoReserve;
-      // Wanted stars.
-      var stars = '';
-      for (var i = 0; i < 5; i++) stars += i < state.wanted ? '\u2605' : '<span class="off">\u2605</span>';
-      SB.el('stars').innerHTML = stars;
-      SB.el('wantedLabel').textContent = state.wanted > 0 ?
-        (state.wanted >= 3 ? 'SOLMAR BAY POLICE IN PURSUIT' : 'WANTED - LOSE THE COPS') : '';
-      // Mission tracker.
-      var tr = SB.Missions.trackerText();
-      var box = SB.el('missionBox');
-      if (state.started) {
-        box.classList.remove('hidden');
-        SB.el('missionTitle').textContent = tr.title;
-        SB.el('missionText').textContent = tr.text;
-        SB.el('missionTimer').textContent = tr.timer > 0 ? 'Time left: ' + SB.fmtTime(tr.timer) : '';
-      } else box.classList.add('hidden');
-      // Speedometer.
-      var sp = SB.el('speedo');
-      if (state.inCar) {
-        sp.classList.remove('hidden');
-        sp.innerHTML = Math.round(Math.abs(state.speed) * 2.2) + '<small>mph &middot; ' + (state.carName || 'car') + '</small>';
-      } else sp.classList.add('hidden');
-      SB.el('crosshair').classList.toggle('hidden', state.inCar);
-      // Clock: in-game time from the day timer.
-      var mins = SB.CFG.dayStartHour * 60 + (state.dayTime / SB.CFG.dayLengthSec) * 24 * 60;
-      var hh = Math.floor(mins / 60) % 24, mm = Math.floor(mins % 60);
-      SB.el('clock').innerHTML = ('0' + hh).slice(-2) + ':' + ('0' + mm).slice(-2) + '<br>Solmar Bay';
-      this.drawMinimap(state);
-    },
-
-    // Top-down minimap: roads, buildings, player arrow, mission and police blips.
-    drawMinimap: function (state) {
-      var cv = SB.el('minimap');
-      var g = cv.getContext('2d');
-      var S = 180, half = SB.CFG.cityHalf;
-      function toMap(x, z) { return [(x + half) / (half * 2) * S, (z + half) / (half * 2) * S]; }
-      g.clearRect(0, 0, S, S);
-      g.fillStyle = '#1b4d3e'; g.fillRect(0, 0, S, S);
-      // Water on the west edge.
-      g.fillStyle = '#1e7fa8'; g.fillRect(0, 0, 8, S);
-      g.fillStyle = '#e8d29a'; g.fillRect(8, 0, 5, S);
-      // Roads.
-      g.strokeStyle = '#3a3f46'; g.lineWidth = 5;
-      SB.ROAD_LINES.forEach(function (c) {
-        var p = toMap(c, 0);
-        g.beginPath(); g.moveTo(p[0], 0); g.lineTo(p[0], S); g.stroke();
-        var q = toMap(0, c);
-        g.beginPath(); g.moveTo(0, q[1]); g.lineTo(S, q[1]); g.stroke();
-      });
-      // Buildings.
-      g.fillStyle = '#8a7a5a';
-      SB.City.buildings.forEach(function (b) {
-        var p = toMap(b.x, b.z);
-        var w = Math.max(2, b.w / (half * 2) * S), d = Math.max(2, b.d / (half * 2) * S);
-        g.fillRect(p[0] - w / 2, p[1] - d / 2, w, d);
-      });
-      // Mission target blip (yellow diamond).
-      var tgt = SB.Missions.missionTargetPos();
-      if (tgt) {
-        var tp = toMap(tgt.x, tgt.z);
-        g.fillStyle = '#ffd54a';
-        g.beginPath();
-        g.moveTo(tp[0], tp[1] - 7); g.lineTo(tp[0] + 6, tp[1]); g.lineTo(tp[0], tp[1] + 7); g.lineTo(tp[0] - 6, tp[1]);
-        g.closePath(); g.fill();
-        g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke();
+    // One frame of HUD: reads the player, the police and the missions directly.
+    update: function (view) {
+      var e = this.els;
+      if (!e) return;
+      var p = SB.Player;
+      e.cash.textContent = SB.fmtCash(p.cash);
+      var hp = SB.clamp(p.health, 0, SB.CFG.playerHealthMax);
+      e.healthFill.style.width = (hp / SB.CFG.playerHealthMax * 100) + '%';
+      e.healthValue.textContent = String(Math.round(hp));
+      if (p.inCar) {
+        e.carRow.style.visibility = 'visible';
+        var ch = SB.clamp(p.inCar.health, 0, 100);
+        e.carFill.style.width = ch + '%';
+        e.carValue.textContent = Math.round(ch) + '%';
+      } else {
+        e.carRow.style.visibility = 'hidden';
       }
-      // Police blips (red/blue dots).
-      g.fillStyle = '#ff1744';
-      SB.Police.cars.forEach(function (c) {
-        var p = toMap(c.x, c.z);
-        g.beginPath(); g.arc(p[0], p[1], 3.5, 0, Math.PI * 2); g.fill();
+      e.ammo.textContent = p.ammo + ' / ' + p.ammoReserve;
+
+      var wanted = SB.Police.wanted;
+      var stars = e.stars.children;
+      for (var i = 0; i < stars.length; i++) {
+        stars[i].className = 'star' + (i < wanted ? ' lit' : '');
+      }
+      e.wantedLabel.textContent = wanted > 0 ? ('WANTED: ' + wanted + (wanted === 1 ? ' STAR' : ' STARS')) : '';
+
+      var hh = Math.floor(view.hour);
+      var mm = Math.floor((view.hour - hh) * 60);
+      e.clock.textContent = (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+      e.district.textContent = view.district;
+
+      var t = SB.Missions.trackerText();
+      e.missionTitle.textContent = t.title;
+      e.missionText.textContent = t.text;
+      if (t.timer > 0) {
+        e.missionTimer.textContent = SB.fmtTime(t.timer);
+        e.missionTimer.className = t.timer < 30 ? 'low' : '';
+      } else {
+        e.missionTimer.textContent = '';
+        e.missionTimer.className = '';
+      }
+
+      if (p.inCar) {
+        e.speedo.style.visibility = 'visible';
+        e.speed.textContent = String(Math.round(Math.abs(p.inCar.speed) * 2.237));
+      } else {
+        e.speedo.style.visibility = 'hidden';
+      }
+
+      this.drawMinimap();
+    },
+
+    // Circular minimap: roads, towers, the player, patrol cars, the job marker.
+    drawMinimap: function () {
+      var ctx = this.mapCtx;
+      if (!ctx) return;
+      var p = SB.Player;
+      var size = 184, half = size / 2;
+      var scale = size / MAP_SPAN;
+      var toX = function (x) { return half + (x - p.x) * scale; };
+      var toY = function (z) { return half + (z - p.z) * scale; };
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(half, half, MAP_R, 0, Math.PI * 2);
+      ctx.clip();
+
+      // Ground.
+      ctx.fillStyle = '#12303e';
+      ctx.fillRect(0, 0, size, size);
+
+      // Roads: the grid lines of Solmar Bay.
+      ctx.strokeStyle = '#3d5a6b';
+      ctx.lineWidth = 5;
+      SB.ROAD_LINES.forEach(function (c) {
+        ctx.beginPath(); ctx.moveTo(toX(c), 0); ctx.lineTo(toX(c), size); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, toY(c)); ctx.lineTo(size, toY(c)); ctx.stroke();
       });
-      // Player arrow (white triangle, rotated by heading).
-      var pp = toMap(state.playerX, state.playerZ);
-      g.save();
-      g.translate(pp[0], pp[1]);
-      g.rotate(-state.heading);
-      g.fillStyle = '#ffffff';
-      g.strokeStyle = '#000'; g.lineWidth = 1.5;
-      g.beginPath();
-      g.moveTo(0, -8); g.lineTo(5.5, 6); g.lineTo(-5.5, 6);
-      g.closePath(); g.fill(); g.stroke();
-      g.restore();
+      ctx.strokeStyle = '#8fb4c7';
+      ctx.lineWidth = 1;
+      SB.ROAD_LINES.forEach(function (c) {
+        ctx.beginPath(); ctx.moveTo(toX(c), 0); ctx.lineTo(toX(c), size); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, toY(c)); ctx.lineTo(size, toY(c)); ctx.stroke();
+      });
+
+      // Towers as small blocks, sized by their footprint.
+      ctx.fillStyle = '#5d7d90';
+      SB.City.buildings.forEach(function (b) {
+        var bx = toX(b.x), by = toY(b.z);
+        if (bx < -4 || bx > size + 4 || by < -4 || by > size + 4) return;
+        var bw = Math.max(2, b.w * scale), bh = Math.max(2, b.d * scale);
+        ctx.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
+      });
+
+      // Job marker: a gold diamond on the objective.
+      var target = SB.Missions.missionTargetPos();
+      if (target) {
+        var tx = toX(target.x), ty = toY(target.z);
+        ctx.fillStyle = '#ffd54a';
+        ctx.beginPath();
+        ctx.moveTo(tx, ty - 6); ctx.lineTo(tx + 5, ty); ctx.lineTo(tx, ty + 6); ctx.lineTo(tx - 5, ty);
+        ctx.closePath(); ctx.fill();
+      }
+
+      // Patrol cars: red dots with a blue ring.
+      SB.Police.cops.forEach(function (cop) {
+        var cx = toX(cop.x), cy = toY(cop.z);
+        ctx.fillStyle = '#ff5252';
+        ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#4d8dff';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.stroke();
+      });
+
+      // The player: a white arrow pointing where they face.
+      // Map north is -z (up); the arrow starts pointing down (+z, heading 0).
+      var heading = p.inCar ? p.inCar.heading : p.heading;
+      ctx.save();
+      ctx.translate(half, half);
+      ctx.rotate(-heading);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(0, 8); ctx.lineTo(5, -6); ctx.lineTo(-5, -6);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+
+      ctx.restore();
+    },
+
+    // A big centre message that fades away on its own.
+    toast: function (title, sub) {
+      var e = this.els;
+      if (!e) return;
+      e.toastTitle.textContent = title;
+      e.toastSub.textContent = sub || '';
+      e.toast.classList.add('show');
+      var self = this;
+      if (this.toastTimer) clearTimeout(this.toastTimer);
+      this.toastTimer = setTimeout(function () {
+        e.toast.classList.remove('show');
+      }, 3500);
+    },
+
+    // The contextual action hint above the bottom bar.
+    showPrompt: function (text) {
+      var e = this.els;
+      if (!e) return;
+      e.promptText.textContent = text;
+      e.prompt.style.display = 'block';
+    },
+
+    hidePrompt: function () {
+      var e = this.els;
+      if (!e) return;
+      e.prompt.style.display = 'none';
+    },
+
+    // A red vignette flash for taking damage.
+    flashDamage: function () {
+      var e = this.els;
+      if (!e) return;
+      e.damageFlash.style.opacity = '1';
+      setTimeout(function () { e.damageFlash.style.opacity = '0'; }, 140);
+    },
+
+    // One line of debug state, kept in the DOM for headless checks.
+    setDebug: function (text) {
+      var e = this.els;
+      if (!e) return;
+      e.debug.textContent = text;
     },
   };
 })();
