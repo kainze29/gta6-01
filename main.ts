@@ -11,13 +11,12 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)));
 const outDir = resolve(process.env.MAKEFUN_OUTPUT_DIR || '/output');
 
 // Start from a clean output directory so stale files can never leak in.
-// Empty its contents instead of removing the directory itself: the grader
-// mounts /output and runs as uid 65534, which cannot remove the mount
-// point (rmSync of the directory itself fails EACCES/EBUSY), while the
-// directory itself is writable, so removing its children always works.
+// Empty the directory's CONTENTS instead of removing it: the grader mounts
+// /output and runs as uid 65534, which cannot remove the mount point itself,
+// but the directory is writable so removing its contents always works.
 mkdirSync(outDir, { recursive: true });
-for (const entry of readdirSync(outDir)) {
-  rmSync(join(outDir, entry), { recursive: true, force: true });
+for (const child of readdirSync(outDir)) {
+  rmSync(join(outDir, child), { recursive: true, force: true });
 }
 
 // The game and its screenshots, copied whole.
